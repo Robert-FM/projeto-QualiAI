@@ -9,3 +9,11 @@ wheels/
 # Virtual environments
 .venv
 .uv-cache/
+
+# Datasets locais (manter apenas a estrutura das pastas no GitHub)
+data/**/*.csv
+data/**/*.json
+data/**/*.parquet
+data/**/*.xlsx
+data/**/*.zip
+link.txt
