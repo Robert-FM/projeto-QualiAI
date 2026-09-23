@@ -79,31 +79,79 @@ Não foram encontrados Dockerfiles, CI/CD, banco de dados, arquivos `.env` ou va
 
 ### ⚡ Com uv
 
-Confirme que o `uv` está instalado e disponível no terminal:
+#### Instalar o `uv`
+
+Windows PowerShell:
+
+```powershell
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+```
+
+Linux/macOS:
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+Feche e abra o terminal novamente, se necessário, e confirme a instalação:
 
 ```bash
 uv --version
 ```
 
-Na raiz do projeto, sincronize o ambiente com o `pyproject.toml` e o `uv.lock`:
+#### Criar e sincronizar o ambiente
+
+Na raiz do projeto, rode:
 
 ```bash
 uv sync
 ```
 
-Esse comando cria ou atualiza `.venv` e instala as versões registradas no lockfile. Para executar comandos usando esse ambiente sem ativá-lo manualmente, use `uv run`:
+O comando usa a versão indicada em `.python-version` quando ela está disponível, cria `.venv` automaticamente e instala as dependências definidas no projeto. No fluxo normal, não é necessário executar `pip install`.
+
+Para atualizar explicitamente o lockfile conforme as restrições do `pyproject.toml`:
 
 ```bash
-uv run projeto-qualiai
+uv lock
+uv sync
 ```
 
-Ao adicionar uma dependência, use o próprio `uv` para atualizar o projeto e o lockfile:
+#### Verificar a instalação
 
 ```bash
-uv add nome-do-pacote
+uv run python --version
+uv run python -c "import pandas, sklearn, tensorflow; print('Dependências carregadas com sucesso')"
 ```
 
-Se o `pyproject.toml` for alterado manualmente, execute `uv sync` novamente. Mantenha `pyproject.toml` e `uv.lock` versionados e não edite o lockfile manualmente.
+#### Executar os notebooks
+
+O `uv run` executa comandos dentro do ambiente do projeto sem exigir ativação manual. Como o Jupyter não é uma dependência do pacote, instale-o separadamente conforme indicado nos pré-requisitos e execute:
+
+```bash
+uv run jupyter notebook
+```
+
+Se preferir ativar o ambiente antes de abrir os notebooks:
+
+Windows PowerShell:
+
+```powershell
+.venv\Scripts\Activate.ps1
+jupyter notebook
+```
+
+Linux/macOS:
+
+```bash
+source .venv/bin/activate
+jupyter notebook
+```
+
+Se o ambiente não aparecer como kernel no Jupyter, registre-o com:
+
+```bash
+uv run python -m ipykernel install --user --name projeto-qualiai --display-name "Python (projeto-qualiai)"
+```
 
 ### 🐍 Com pip
 
@@ -143,14 +191,7 @@ uv run projeto-qualiai
 
 No estado atual, ele imprime `Hello from projeto-qualiai!`.
 
-Para abrir os notebooks, execute a partir de `notebooks`, pois eles usam caminhos relativos para `../data/raw`:
-
-```bash
-cd notebooks
-jupyter notebook
-```
-
-Os notebooks carregam os dados com `pandas.read_csv` e realizam inspeções iniciais como `head`, `shape`, `columns`, `info` e valores ausentes.
+Para abrir os notebooks e configurar o kernel, consulte a subseção **Executar os notebooks** acima. Eles devem ser iniciados a partir de `notebooks`, pois usam caminhos relativos para `../data/raw`.
 
 ## 🧪 Testes
 
