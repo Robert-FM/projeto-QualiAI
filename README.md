@@ -2,7 +2,9 @@
 
 Projeto de Ciência de Dados e Inteligência Artificial para explorar reclamações automotivas e investigar padrões relacionados à qualidade de veículos.
 
-> **Status:** fase inicial de análise exploratória (EDA). Ainda não há modelo de Machine Learning treinado nem aplicação de inferência.
+> 🚧 **Status:** em desenvolvimento.
+>
+> O projeto está na fase inicial de análise exploratória (EDA). Ainda não há modelo de Machine Learning treinado nem aplicação de inferência. As análises e os modelos serão evoluídos conforme a qualidade dos dados e os resultados obtidos.
 
 ## 📖 Sobre o projeto
 
