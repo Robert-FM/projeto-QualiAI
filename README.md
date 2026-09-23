@@ -79,9 +79,31 @@ Não foram encontrados Dockerfiles, CI/CD, banco de dados, arquivos `.env` ou va
 
 ### ⚡ Com uv
 
+Confirme que o `uv` está instalado e disponível no terminal:
+
+```bash
+uv --version
+```
+
+Na raiz do projeto, sincronize o ambiente com o `pyproject.toml` e o `uv.lock`:
+
 ```bash
 uv sync
 ```
+
+Esse comando cria ou atualiza `.venv` e instala as versões registradas no lockfile. Para executar comandos usando esse ambiente sem ativá-lo manualmente, use `uv run`:
+
+```bash
+uv run projeto-qualiai
+```
+
+Ao adicionar uma dependência, use o próprio `uv` para atualizar o projeto e o lockfile:
+
+```bash
+uv add nome-do-pacote
+```
+
+Se o `pyproject.toml` for alterado manualmente, execute `uv sync` novamente. Mantenha `pyproject.toml` e `uv.lock` versionados e não edite o lockfile manualmente.
 
 ### 🐍 Com pip
 
