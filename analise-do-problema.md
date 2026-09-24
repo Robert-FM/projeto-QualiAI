@@ -470,3 +470,856 @@ Além disso, a base de reclamações representa **relatos de consumidores**. Por
 Da mesma forma, o número absoluto de reclamações não representa necessariamente uma **taxa de incidência**, pois esse tipo de análise exigiria um denominador adequado, como quantidade de veículos vendidos ou em circulação.
 
 Essas limitações deverão ser consideradas durante a interpretação dos resultados do QualiAuto AI.
+
+## 3.2 Leitura inicial dos conjuntos de dados
+
+Após registrar a origem e a proveniência dos dados, foi realizada uma primeira inspeção dos cinco conjuntos que compõem o projeto QualiAuto AI.
+
+O objetivo desta etapa não é realizar limpeza ou integração, mas compreender:
+
+- o que cada dataset representa;
+- qual é a unidade aproximada de observação;
+- quais informações estão disponíveis;
+- quais campos parecem relacionar as bases;
+- quais cuidados deverão ser considerados durante a EDA.
+
+---
+
+### 3.2.1 Visão geral das cinco fontes
+
+Os datasets representam diferentes perspectivas sobre segurança e qualidade automotiva.
+
+```text
+                         QUALIAUTO AI
+                              │
+        ┌─────────────────────┼─────────────────────┐
+        │                     │                     │
+        ▼                     ▼                     ▼
+   COMPLAINTS          INVESTIGATIONS            RECALLS
+   Reclamações          Investigações           Campanhas
+   de consumidores      da NHTSA                de recall
+        │                     │                     │
+        │                     │                     │
+        └──────────────┬──────┴──────────────┬──────┘
+                       │                     │
+                       ▼                     ▼
+                    RATINGS              CAR MODELS
+                  Avaliações de          Referência de
+                    segurança          ano/marca/modelo
+```
+
+Cada base responde a uma pergunta diferente:
+
+| Dataset | Pergunta principal |
+|---|---|
+| `complaints.csv` | O que os consumidores estão relatando? |
+| `investigations.csv` | O que a NHTSA decidiu investigar? |
+| `recalls.csv` | Quais problemas estão associados a campanhas de recall? |
+| `ratings.csv` | Como os veículos foram avaliados em segurança? |
+| `car_models.csv` | Quais combinações de ano, marca e modelo estão registradas? |
+
+---
+
+# 3.3 Complaints — reclamações dos consumidores
+
+O `complaints.csv` contém registros de problemas relatados por consumidores.
+
+### Estrutura inicial
+
+```text
+284.745 registros
+15 variáveis
+28,8 MB
+
+Tipos:
+├── 9 str
+├── 4 int64
+└── 2 bool
+```
+
+### Principais variáveis
+
+| Variável | Papel inicial |
+|---|---|
+| `odiNumber` | Identificador do registro |
+| `manufacturer` | Fabricante |
+| `make` | Marca |
+| `model` | Modelo |
+| `modelYear` | Ano-modelo |
+| `crash` | Indicação de acidente |
+| `fire` | Indicação de incêndio |
+| `numberOfInjuries` | Número de feridos |
+| `numberOfDeaths` | Número de mortes |
+| `dateOfIncident` | Data do incidente |
+| `dateComplaintFiled` | Data de registro da reclamação |
+| `vin` | Identificação do veículo |
+| `components` | Componente(s) associado(s) |
+| `summary` | Relato textual da reclamação |
+| `products` | Informações sobre o produto associado ao registro |
+
+### Relação central para NLP
+
+A inspeção dos primeiros registros mostrou que `summary` contém o relato do problema, enquanto `components` informa o componente relacionado.
+
+```text
+             RECLAMAÇÃO
+                 │
+                 ▼
+             summary
+        "O que aconteceu?"
+                 │
+                 ▼
+        ┌─────────────────┐
+        │ Modelo de NLP ? │
+        └─────────────────┘
+                 │
+                 ▼
+            components
+      "Qual sistema/componente?"
+```
+
+Isso mantém uma hipótese importante para o projeto:
+
+`summary → components`
+
+Entretanto, foram encontrados registros como:
+
+```text
+SEAT BELTS,SEATS
+```
+
+Logo, uma reclamação pode estar associada a mais de um componente.
+
+```text
+                    summary
+                       │
+                       ▼
+                  reclamação
+                       │
+             ┌─────────┴─────────┐
+             ▼                   ▼
+        SEAT BELTS             SEATS
+```
+
+Isso deverá ser investigado antes de definir se o problema de ML será multiclasse, multirrótulo ou terá outra formulação.
+
+---
+
+# 3.4 Recalls — campanhas de recall
+
+O `recalls.csv` contém informações sobre campanhas relacionadas a problemas ou defeitos identificados em veículos e componentes.
+
+### Principais variáveis
+
+| Variável | Papel inicial |
+|---|---|
+| `Manufacturer` | Fabricante responsável |
+| `NHTSACampaignNumber` | Identificador da campanha de recall |
+| `parkIt` | Indicador relacionado à recomendação de não utilização do veículo |
+| `parkOutSide` | Indicador relacionado à recomendação de estacionar o veículo externamente |
+| `ReportReceivedDate` | Data de recebimento/registro do relatório |
+| `Component` | Componente ou sistema relacionado ao recall |
+| `Summary` | Descrição do problema ou defeito |
+| `Consequence` | Possíveis consequências do defeito |
+| `Remedy` | Procedimento ou solução para correção |
+| `Notes` | Informações adicionais sobre a campanha |
+| `ModelYear` | Ano-modelo |
+| `Make` | Marca |
+| `Model` | Modelo |
+| `NHTSAActionNumber` | Número de ação associado na NHTSA |
+| `overTheAirUpdate` | Indicador relacionado à possibilidade de atualização remota |
+
+### Estrutura conceitual
+
+Algumas variáveis formam uma sequência particularmente interessante para inteligência de qualidade:
+
+```text
+Component
+    │
+    ▼
+Qual componente apresenta o problema?
+    │
+    ▼
+Summary
+    │
+    ▼
+Qual defeito/problema foi identificado?
+    │
+    ▼
+Consequence
+    │
+    ▼
+O que pode acontecer?
+    │
+    ▼
+Remedy
+    │
+    ▼
+Como o problema será corrigido?
+```
+
+Podemos resumir essa estrutura como:
+
+```text
+COMPONENTE
+    │
+    ▼
+  DEFEITO
+    │
+    ▼
+CONSEQUÊNCIA
+    │
+    ▼
+ CORREÇÃO
+```
+
+### Uma campanha pode envolver vários modelos
+
+Na inspeção inicial foi observado:
+
+```text
+Campanha 14V798000
+│
+├── BLUE BIRD
+│   └── ALL AMERICAN — 2016
+│
+└── BLUE BIRD
+    └── VISION — 2016
+```
+
+Portanto:
+
+> **Número de registros não é necessariamente igual ao número de campanhas de recall.**
+
+Uma campanha pode aparecer em vários registros porque pode abranger diferentes modelos e/ou anos-modelo.
+
+### Componentes possuem diferentes níveis de detalhe
+
+Foram encontrados exemplos como:
+
+```text
+PARKING BRAKE
+```
+
+e:
+
+```text
+PARKING BRAKE:DRIVELINE:HYDRAULIC:ACTUATOR
+```
+
+ou:
+
+```text
+ENGINE AND ENGINE COOLING:EXHAUST SYSTEM
+```
+
+Isso indica diferentes níveis de especificidade na descrição dos componentes.
+
+```text
+PARKING BRAKE
+      │
+      ▼
+  DRIVELINE
+      │
+      ▼
+  HYDRAULIC
+      │
+      ▼
+   ACTUATOR
+```
+
+Essa granularidade deverá ser investigada antes de qualquer padronização.
+
+---
+
+# 3.5 Investigations — investigações da NHTSA
+
+O `investigations.csv` contém informações associadas às investigações conduzidas pela NHTSA.
+
+### Estrutura inicial
+
+```text
+154.380 registros
+11 variáveis
+13 MB
+
+5.348 valores distintos de
+NHTSA ACTION NUMBER
+```
+
+### Principais variáveis
+
+| Variável | Papel inicial |
+|---|---|
+| `NHTSA ACTION NUMBER` | Identificador da ação/investigação |
+| `MAKE` | Marca |
+| `MODEL` | Modelo |
+| `YEAR` | Ano-modelo |
+| `COMPNAME` | Componente ou sistema investigado |
+| `MFR_NAME` | Fabricante |
+| `ODATE` | Data associada à abertura da investigação |
+| `CDATE` | Data associada ao encerramento da investigação |
+| `CAMPNO` | Número de campanha associado ao registro |
+| `SUBJECT` | Assunto ou título da investigação |
+| `SUMMARY` | Descrição textual da investigação |
+
+### Uma investigação pode possuir vários registros
+
+A inspeção mostrou:
+
+```text
+154.380 registros
+        │
+        ▼
+5.348 NHTSA ACTION NUMBER distintos
+        │
+        ▼
+uma investigação pode gerar
+vários registros no dataset
+```
+
+Por exemplo:
+
+```text
+Investigação AQ08001
+│
+├── PACE AMERICAN — TRAILER — 2003
+├── PACE AMERICAN — TRAILER — 2004
+└── PACE AMERICAN — TRAILER — 2005
+```
+
+Portanto:
+
+> **Número de registros não representa diretamente o número de investigações.**
+
+### Representação das datas
+
+Foram encontrados valores como:
+
+```text
+ODATE = 20080618
+CDATE = 20081029
+```
+
+que apresentam estrutura:
+
+```text
+AAAAMMDD
+
+20080618
+   ↓
+18/06/2008
+
+20081029
+   ↓
+29/10/2008
+```
+
+Os significados exatos e as regras de preenchimento dessas variáveis deverão ser confirmados antes do tratamento.
+
+### Relação entre investigação e recall
+
+Uma das descobertas mais importantes da inspeção foi:
+
+```text
+Investigação AQ09001
+│
+├── CAMPNO 05E069000
+├── CAMPNO 06E027000
+├── CAMPNO 06E066000
+├── CAMPNO 06E080000
+├── CAMPNO 06E099000
+├── CAMPNO 07E020000
+└── ...
+```
+
+Uma investigação pode, portanto, aparecer associada a diferentes números de campanha.
+
+No dataset de recalls existe:
+
+```text
+NHTSACampaignNumber
+```
+
+enquanto em investigations existe:
+
+```text
+CAMPNO
+```
+
+Isso sugere uma relação a ser posteriormente validada:
+
+```text
+       INVESTIGATIONS                       RECALLS
+
+┌─────────────────────────┐         ┌─────────────────────────┐
+│ NHTSA ACTION NUMBER     │         │ NHTSACampaignNumber     │
+│ CAMPNO                  │────────▶│                         │
+│ COMPNAME                │         │ Component               │
+│ SUMMARY                 │         │ Summary                 │
+└─────────────────────────┘         └─────────────────────────┘
+
+              CAMPNO  ↔  NHTSACampaignNumber
+```
+
+Essa é, até o momento, uma das relações mais explícitas encontradas entre as bases.
+
+---
+
+# 3.6 Ratings — avaliações de segurança
+
+O `ratings.csv` contém informações relacionadas às avaliações de segurança dos veículos.
+
+### Estrutura inicial
+
+```text
+2.469 registros
+25 variáveis
+482,4 KB
+
+Tipos:
+├── 21 str
+├── 2 float64
+└── 2 int64
+```
+
+### Principais variáveis
+
+| Variável | Papel inicial |
+|---|---|
+| `OverallRating` | Avaliação geral de segurança |
+| `OverallFrontCrashRating` | Avaliação geral em colisão frontal |
+| `FrontCrashDriversideRating` | Avaliação frontal do lado do motorista |
+| `FrontCrashPassengersideRating` | Avaliação frontal do lado do passageiro |
+| `OverallSideCrashRating` | Avaliação geral em colisão lateral |
+| `SideCrashDriversideRating` | Avaliação lateral do lado do motorista |
+| `SideCrashPassengersideRating` | Avaliação lateral do lado do passageiro |
+| `combinedSideBarrierAndPoleRating-Front` | Avaliação combinada de barreira lateral e poste na região dianteira |
+| `combinedSideBarrierAndPoleRating-Rear` | Avaliação combinada de barreira lateral e poste na região traseira |
+| `sideBarrierRating-Overall` | Avaliação geral no teste de barreira lateral |
+| `RolloverRating` | Avaliação relacionada a capotamento |
+| `RolloverRating2` | Segunda variável de avaliação relacionada a capotamento |
+| `RolloverPossibility` | Possibilidade/probabilidade registrada de capotamento |
+| `RolloverPossibility2` | Segunda variável relacionada à possibilidade de capotamento |
+| `dynamicTipResult` | Resultado do teste dinâmico relacionado a capotamento |
+| `SidePoleCrashRating` | Avaliação de colisão lateral contra poste |
+| `NHTSAElectronicStabilityControl` | Informação sobre controle eletrônico de estabilidade |
+| `NHTSAForwardCollisionWarning` | Informação sobre alerta de colisão frontal |
+| `NHTSALaneDepartureWarning` | Informação sobre alerta de saída de faixa |
+| `ModelYear` | Ano-modelo |
+| `Make` | Marca |
+| `Model` | Modelo |
+| `VehicleDescription` | Descrição da configuração do veículo |
+| `VehicleId` | Identificador do veículo/configuração |
+| `rating_updated_on` | Data/hora de atualização do registro de avaliação |
+
+> **Observação:** o significado exato das variáveis com sufixo `2` deverá ser confirmado na documentação antes de qualquer interpretação analítica.
+
+### Dimensões das avaliações
+
+O dataset oferece diferentes perspectivas de segurança:
+
+```text
+                         VEÍCULO
+                            │
+             ┌──────────────┼──────────────┐
+             │              │              │
+             ▼              ▼              ▼
+        FRONT CRASH     SIDE CRASH      ROLLOVER
+             │              │              │
+        motorista       motorista       possibilidade
+        passageiro      passageiro      de capotamento
+```
+
+Além disso:
+
+```text
+VEÍCULO
+   │
+   ├── Electronic Stability Control
+   ├── Forward Collision Warning
+   └── Lane Departure Warning
+```
+
+### `Not Rated` não significa nota zero
+
+Foi observado:
+
+```text
+OverallRating
+
+5
+Not Rated
+5
+Not Rated
+...
+```
+
+Portanto:
+
+```text
+Not Rated
+    ≠
+Nota 0
+```
+
+Para o pandas, `"Not Rated"` é um valor textual existente. Semanticamente, entretanto, representa uma avaliação não disponível.
+
+```text
+df.info()
+    │
+    ▼
+não identifica NaN
+    │
+    ▼
+"Not Rated"
+    │
+    ▼
+informação de avaliação indisponível
+```
+
+### Diferentes configurações do mesmo modelo
+
+Também foi observado:
+
+```text
+2024 ACURA MDX
+│
+├── SUV FWD → VehicleId 18963
+│
+└── SUV AWD → VehicleId 18964
+```
+
+Isso demonstra que:
+
+```text
+Make + Model + ModelYear
+```
+
+não necessariamente identifica uma configuração específica dentro do dataset de ratings.
+
+---
+
+# 3.7 Car Models — referência de veículos
+
+O `car_models.csv` possui a estrutura mais simples entre os cinco conjuntos.
+
+### Estrutura inicial
+
+```text
+6.665 registros
+3 variáveis
+156,3 KB
+
+Tipos:
+├── 1 int64
+└── 2 str
+```
+
+### Principais variáveis
+
+| Variável | Papel inicial |
+|---|---|
+| `modelYear` | Ano-modelo |
+| `make` | Marca |
+| `model` | Modelo |
+
+Sua estrutura básica é:
+
+```text
+modelYear
+    +
+make
+    +
+model
+```
+
+Exemplos:
+
+```text
+2020 + BMW       + Z4
+2018 + CHEVROLET + BOLT EV
+2022 + GENESIS   + G90
+2018 + FERRARI   + 488 SPIDER
+2023 + AUDI      + A4
+```
+
+A inspeção inicial sugere que essa base pode funcionar como uma referência das combinações de ano, marca e modelo.
+
+Entretanto, ainda será necessário verificar se:
+
+```text
+modelYear + make + model
+```
+
+é realmente uma combinação única.
+
+---
+
+# 3.8 Como os cinco datasets começam a se conectar
+
+A inspeção inicial permite construir o primeiro mapa conceitual do QualiAuto AI.
+
+```text
+                    ┌────────────────────┐
+                    │     CAR MODELS     │
+                    │ ano / marca/modelo │
+                    └─────────┬──────────┘
+                              │
+                              │ referência do veículo
+                              ▼
+                    ┌────────────────────┐
+                    │      VEÍCULO       │
+                    └─────────┬──────────┘
+                              │
+          ┌───────────────────┼───────────────────┐
+          │                   │                   │
+          ▼                   ▼                   ▼
+┌──────────────────┐ ┌──────────────────┐ ┌──────────────────┐
+│    COMPLAINTS    │ │     RATINGS      │ │     RECALLS      │
+│                  │ │                  │ │                  │
+│ problemas        │ │ avaliação de     │ │ defeitos e       │
+│ relatados        │ │ segurança        │ │ campanhas        │
+└────────┬─────────┘ └──────────────────┘ └────────▲─────────┘
+         │                                         │
+         │ possíveis padrões                       │ CAMPNO
+         │                                         │
+         ▼                                         │
+┌──────────────────────────────────────────────────┴─┐
+│                  INVESTIGATIONS                     │
+│                                                    │
+│           problemas investigados pela NHTSA        │
+└────────────────────────────────────────────────────┘
+```
+
+Uma interpretação conceitual possível é:
+
+```text
+CONSUMIDOR
+    │
+    ▼
+COMPLAINT
+"Estou observando este problema."
+    │
+    ▼
+possível padrão de segurança
+    │
+    ▼
+INVESTIGATION
+"A NHTSA está investigando este problema."
+    │
+    ▼
+possível campanha
+    │
+    ▼
+RECALL
+"Existe uma ação formal relacionada ao defeito."
+```
+
+Esse fluxo é apenas conceitual.
+
+Ele **não implica que toda reclamação gere uma investigação nem que toda investigação resulte em recall**.
+
+O dataset `ratings` acrescenta outra perspectiva:
+
+```text
+                VEÍCULO
+                   │
+       ┌───────────┴───────────┐
+       │                       │
+       ▼                       ▼
+problemas observados      desempenho de
+no mundo real             segurança avaliado
+       │                       │
+       ▼                       ▼
+complaints / recalls          ratings
+/ investigations
+```
+
+---
+
+# 3.9 Campos potencialmente relacionados
+
+As bases apresentam diferentes nomes para conceitos semelhantes.
+
+| Conceito | Complaints | Recalls | Investigations | Ratings | Car Models |
+|---|---|---|---|---|---|
+| Ano-modelo | `modelYear` | `ModelYear` | `YEAR` | `ModelYear` | `modelYear` |
+| Marca | `make` | `Make` | `MAKE` | `Make` | `make` |
+| Modelo | `model` | `Model` | `MODEL` | `Model` | `model` |
+| Fabricante | `manufacturer` | `Manufacturer` | `MFR_NAME` | — | — |
+| Componente | `components` | `Component` | `COMPNAME` | — | — |
+| Texto relacionado ao problema | `summary` | `Summary` | `SUMMARY` | — | — |
+| Campanha | — | `NHTSACampaignNumber` | `CAMPNO` | — | — |
+
+### Possível dimensão comum do veículo
+
+```text
+                   IDENTIFICAÇÃO DO VEÍCULO
+
+ complaints       recalls       investigations      ratings       car_models
+     │               │                │                │               │
+ modelYear       ModelYear           YEAR          ModelYear       modelYear
+     │               │                │                │               │
+    make            Make             MAKE             Make            make
+     │               │                │                │               │
+   model            Model            MODEL            Model           model
+     │               │                │                │               │
+     └───────────────┴────────────────┴────────────────┴───────────────┘
+                                      │
+                                      ▼
+                            possível dimensão comum
+                                do veículo
+```
+
+### Informações textuais e componentes
+
+```text
+             TEXTO                         COMPONENTE
+
+complaints   summary        ───────────▶   components
+
+recalls      Summary        ───────────▶   Component
+               │
+               ├───────────▶ Consequence
+               └───────────▶ Remedy
+
+investig.    SUMMARY        ───────────▶   COMPNAME
+```
+
+Isso mostra que **complaints, recalls e investigations possuem informação textual associada a componentes automotivos**, algo potencialmente importante para futuras análises de NLP.
+
+---
+
+# 3.10 Hipótese de evolução do QualiAuto AI
+
+A hipótese inicial de aprendizado de máquina permanece:
+
+```text
+summary
+   │
+   ▼
+MODELO NLP
+   │
+   ▼
+components
+```
+
+Porém, a inspeção das demais fontes mostra que o projeto poderá futuramente explorar uma estrutura mais ampla:
+
+```text
+                   NOVA RECLAMAÇÃO
+                         │
+                         ▼
+                    texto/summary
+                         │
+                         ▼
+                 ┌────────────────┐
+                 │   MODELO NLP   │
+                 └───────┬────────┘
+                         │
+                         ▼
+               componente provável
+                         │
+                         ▼
+              INTELIGÊNCIA DE QUALIDADE
+                         │
+          ┌──────────────┼───────────────┐
+          │              │               │
+          ▼              ▼               ▼
+     reclamações    investigações      recalls
+      similares       relacionadas    relacionados
+          │              │               │
+          └──────────────┼───────────────┘
+                         │
+                         ▼
+                      ratings
+                         │
+                         ▼
+                contexto de segurança
+```
+
+Essa arquitetura ainda é apenas uma **hipótese de evolução do projeto**.
+
+A EDA deverá determinar quais relações são realmente suportadas pelos dados antes da definição da arquitetura final.
+
+---
+
+# 3.11 Pontos de atenção para as próximas etapas
+
+A inspeção inicial revelou questões que deverão ser investigadas antes de qualquer integração ou modelagem:
+
+1. **Registro não significa necessariamente entidade única.**  
+   Uma campanha ou investigação pode aparecer em várias linhas.
+
+2. **Componentes possuem diferentes granularidades.**  
+   Existem componentes simples, hierárquicos e registros com múltiplos componentes.
+
+3. **As bases utilizam diferentes convenções de nomenclatura.**  
+   Exemplos: `make`, `Make` e `MAKE`.
+
+4. **Datas possuem diferentes representações.**  
+   Algumas estão armazenadas como texto e outras como números.
+
+5. **Ausência semântica nem sempre aparece como `NaN`.**  
+   `Not Rated`, por exemplo, representa uma avaliação indisponível.
+
+6. **Marca + modelo + ano não deve ser assumido imediatamente como chave única.**
+
+7. **`CAMPNO ↔ NHTSACampaignNumber` é uma relação candidata que precisa ser validada.**
+
+8. **As variáveis textuais `summary`, `Summary` e `SUMMARY` possuem papéis semelhantes, mas pertencem a contextos diferentes e não devem ser tratadas automaticamente como equivalentes.**
+
+9. **Nenhum `merge` entre os datasets deverá ser realizado antes da análise de qualidade, granularidade e compatibilidade das possíveis chaves.**
+
+---
+
+# 3.12 Síntese da leitura inicial
+
+A inspeção dos cinco datasets mostra que o QualiAuto AI possui fontes complementares de informação.
+
+```text
+             QUALIDADE E SEGURANÇA AUTOMOTIVA
+
+                    ┌─────────────┐
+                    │   VEÍCULO   │
+                    └──────┬──────┘
+                           │
+        ┌──────────────────┼───────────────────┐
+        │                  │                   │
+        ▼                  ▼                   ▼
+   EXPERIÊNCIA         AVALIAÇÃO           AÇÕES DE
+   DO USUÁRIO          DE SEGURANÇA        SEGURANÇA
+        │                  │                   │
+        ▼                  ▼             ┌─────┴─────┐
+   COMPLAINTS           RATINGS           ▼           ▼
+                                  INVESTIGATIONS   RECALLS
+```
+
+Assim, as bases permitem observar o mesmo domínio por diferentes perspectivas:
+
+```text
+COMPLAINTS
+    ↓
+problemas relatados pelos consumidores
+
+INVESTIGATIONS
+    ↓
+problemas investigados pela NHTSA
+
+RECALLS
+    ↓
+campanhas associadas a defeitos
+
+RATINGS
+    ↓
+avaliações e características de segurança
+
+CAR MODELS
+    ↓
+referência de ano, marca e modelo
+```
+
+Essa visão será utilizada como referência durante as próximas etapas da análise exploratória.
+
+O próximo objetivo será aprofundar a compreensão das variáveis, investigar qualidade, valores ausentes, duplicidades, categorias e granularidade antes de decidir como os dados serão preparados e integrados.
